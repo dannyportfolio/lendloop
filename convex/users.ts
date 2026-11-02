@@ -2,6 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { requireAdmin, requireAuthenticatedUser } from "./lib/auth";
+import { timingSafeEqual } from "./lib/crypto";
 
 /**
  * Returns the current authenticated viewer profile.
@@ -107,8 +108,11 @@ export const seedInitialAdmin = mutation({
     clerkId: v.string(),
   },
   handler: async (ctx, args) => {
-    const expectedSecret = process.env.CONVEX_ADMIN_SEED_SECRET || "lendloop_initial_seed_secret_2026";
-    if (args.seedSecret !== expectedSecret) {
+    const expectedSecret = process.env.CONVEX_ADMIN_SEED_SECRET;
+    if (!expectedSecret) {
+      throw new Error("CONFIG_ERROR: CONVEX_ADMIN_SEED_SECRET is not configured on the server");
+    }
+    if (!timingSafeEqual(args.seedSecret, expectedSecret)) {
       throw new Error("FORBIDDEN: Invalid admin bootstrap secret");
     }
 

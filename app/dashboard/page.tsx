@@ -112,6 +112,7 @@ export default function DashboardPage() {
 
   const [activeTab, setActiveTab] = useState<DashboardTab>("catalog");
   const [catalogSearch, setCatalogSearch] = useState("");
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   // Modals state
   const [isListingModalOpen, setIsListingModalOpen] = useState(false);
@@ -139,38 +140,65 @@ export default function DashboardPage() {
   const pendingIncomingCount =
     incomingRequests?.filter((r: IncomingRequestItem) => r.status === "pending").length || 0;
 
+  const handleApproveRequest = async (requestId: Id<"borrowRequests">) => {
+    setDashboardError(null);
+    try {
+      await approveRequest({ requestId });
+    } catch (err: unknown) {
+      setDashboardError(err instanceof Error ? err.message : "Failed to approve request");
+    }
+  };
+
   const handleDeclineRequest = (requestId: Id<"borrowRequests">, toolName: string) => {
+    setDashboardError(null);
     setConfirmDialog({
       isOpen: true,
       title: "Decline Borrow Request?",
       message: `Are you sure you want to decline the request for "${toolName}"? The borrower will be notified.`,
       onConfirm: async () => {
-        await declineRequest({ requestId });
-        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await declineRequest({ requestId });
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        } catch (err: unknown) {
+          setDashboardError(err instanceof Error ? err.message : "Failed to decline request");
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        }
       },
     });
   };
 
   const handleDeleteListing = (listingId: Id<"listings">, toolName: string) => {
+    setDashboardError(null);
     setConfirmDialog({
       isOpen: true,
       title: "Remove Listing?",
       message: `Are you sure you want to remove "${toolName}"? Existing loans will remain in your history.`,
       onConfirm: async () => {
-        await deleteListing({ listingId });
-        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await deleteListing({ listingId });
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        } catch (err: unknown) {
+          setDashboardError(err instanceof Error ? err.message : "Failed to remove listing");
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        }
       },
     });
   };
 
   const handleMarkReturned = (loanId: Id<"loans">, toolName: string) => {
+    setDashboardError(null);
     setConfirmDialog({
       isOpen: true,
       title: "Confirm Tool Return",
       message: `Confirm that "${toolName}" has been safely returned in functional condition?`,
       onConfirm: async () => {
-        await markReturned({ loanId });
-        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await markReturned({ loanId });
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        } catch (err: unknown) {
+          setDashboardError(err instanceof Error ? err.message : "Failed to mark tool as returned");
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        }
       },
     });
   };
@@ -284,6 +312,18 @@ export default function DashboardPage() {
               )}
             </button>
           </div>
+
+          {dashboardError && (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-center justify-between">
+              <span>{dashboardError}</span>
+              <button
+                onClick={() => setDashboardError(null)}
+                className="text-xs font-semibold text-red-800 underline hover:no-underline ml-4"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
           {/* TAB 1: BROWSE CATALOG */}
           {activeTab === "catalog" && (
@@ -540,7 +580,7 @@ export default function DashboardPage() {
                         {req.status === "pending" && (
                           <div className="flex items-center gap-2 shrink-0">
                             <button
-                              onClick={() => approveRequest({ requestId: req._id })}
+                              onClick={() => handleApproveRequest(req._id)}
                               className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700"
                             >
                               <Check className="h-3.5 w-3.5" />

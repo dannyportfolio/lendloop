@@ -1,7 +1,45 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { getTodayDateString } from "../../convex/lib/dates";
+import { timingSafeEqual } from "../../convex/lib/crypto";
+import { recordAutomationWriteback } from "../../convex/automation";
 
 describe("Idempotency Key Formulation & State Invariants", () => {
+  it("validates timingSafeEqual correctly handles equal and unequal strings", () => {
+    expect(timingSafeEqual("secret123", "secret123")).toBe(true);
+    expect(timingSafeEqual("secret123", "secret124")).toBe(false);
+    expect(timingSafeEqual("secret123", "secret1234")).toBe(false);
+    expect(timingSafeEqual("", "")).toBe(true);
+    expect(timingSafeEqual("a", "")).toBe(false);
+  });
+
+  it("handles duplicate automation writebacks idempotently", async () => {
+    const existingEvent = {
+      _id: "event_123",
+      eventId: "evt_uuid_123",
+      status: "succeeded",
+      updatedAt: 1000,
+    };
+    const ctx = {
+      db: {
+        query: vi.fn().mockReturnValue({
+          withIndex: vi.fn().mockReturnValue({
+            first: vi.fn().mockResolvedValue(existingEvent),
+          }),
+        }),
+        patch: vi.fn(),
+        insert: vi.fn(),
+      },
+    };
+
+    const res = await (recordAutomationWriteback as any)._handler(ctx, {
+      eventId: "evt_uuid_123",
+      status: "succeeded",
+    });
+
+    expect(res.success).toBe(true);
+    expect(res.alreadyRecorded).toBe(true);
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+  });
   it("generates deterministic daily idempotency keys for overdue loans", () => {
     const loanId = "loan_saw_123";
     const fixedDate = new Date("2026-11-02T10:00:00Z");

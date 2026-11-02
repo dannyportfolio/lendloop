@@ -187,9 +187,9 @@ export const markLoanReturned = mutation({
       updatedAt: now,
     });
 
-    // 2. Make tool available for neighborhood lending again
+    // 2. Make tool available for neighborhood lending again only if not soft-deleted
     const listing = (await ctx.db.get(loan.listingId)) as Doc<"listings"> | null;
-    if (listing) {
+    if (listing && !listing.isRemoved) {
       await ctx.db.patch(listing._id, {
         isAvailable: true,
         updatedAt: now,

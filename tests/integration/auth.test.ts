@@ -7,6 +7,7 @@ import {
   requireLender,
   requireBorrowerOrLender,
 } from "../../convex/lib/auth";
+import { seedInitialAdmin } from "../../convex/users";
 
 describe("Server-Side RBAC & Authorization Guards", () => {
   const userA = {
@@ -169,5 +170,40 @@ describe("Server-Side RBAC & Authorization Guards", () => {
     expect(loanPartyBob.loan._id).toBe("loan_1");
     const loanPartyAlice = await requireBorrowerOrLender(aliceCtx, "loan_1" as any);
     expect(loanPartyAlice.loan._id).toBe("loan_1");
+  });
+
+  it("rejects seedInitialAdmin when CONVEX_ADMIN_SEED_SECRET is unconfigured or mismatched", async () => {
+    const originalSecret = process.env.CONVEX_ADMIN_SEED_SECRET;
+    delete process.env.CONVEX_ADMIN_SEED_SECRET;
+
+    const ctx = {
+      db: {
+        query: vi.fn(),
+        patch: vi.fn(),
+        insert: vi.fn(),
+      },
+    };
+
+    await expect(
+      (seedInitialAdmin as any)._handler(ctx, {
+        seedSecret: "some_secret",
+        clerkId: "clerk_user_a",
+      })
+    ).rejects.toThrow("CONFIG_ERROR");
+
+    process.env.CONVEX_ADMIN_SEED_SECRET = "super_test_secret_12345";
+
+    await expect(
+      (seedInitialAdmin as any)._handler(ctx, {
+        seedSecret: "wrong_secret",
+        clerkId: "clerk_user_a",
+      })
+    ).rejects.toThrow("FORBIDDEN");
+
+    if (originalSecret) {
+      process.env.CONVEX_ADMIN_SEED_SECRET = originalSecret;
+    } else {
+      delete process.env.CONVEX_ADMIN_SEED_SECRET;
+    }
   });
 });

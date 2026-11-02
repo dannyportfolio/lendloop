@@ -249,3 +249,74 @@ export const adminRemoveListing = mutation({
     return { success: true, removedListingId: listing._id };
   },
 });
+
+/**
+ * Admin query: retrieves all listings across all users, including on-loan and removed tools.
+ * Guarded by `requireAdmin`.
+ */
+export const getAllListingsAdmin = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const listings = await ctx.db.query("listings").collect();
+
+    return await Promise.all(
+      listings.map(async (listing) => {
+        const owner = (await ctx.db.get(listing.ownerId)) as Doc<"users"> | null;
+        return {
+          _id: listing._id,
+          ownerId: listing.ownerId,
+          name: listing.name,
+          category: listing.category,
+          condition: listing.condition,
+          description: listing.description,
+          isAvailable: listing.isAvailable,
+          isRemoved: listing.isRemoved,
+          createdAt: listing.createdAt,
+          updatedAt: listing.updatedAt,
+          owner: {
+            _id: owner?._id,
+            name: owner?.name || "Community Member",
+            email: owner?.email,
+            isTrustedLender: owner?.isTrustedLender || false,
+          },
+        };
+      })
+    );
+  },
+});
+
+/**
+ * Administrative restoration of a soft-deleted listing.
+ * Guarded by `requireAdmin` with audit logging.
+ */
+export const adminRestoreListing = mutation({
+  args: { listingId: v.id("listings") },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    const listing = (await ctx.db.get(args.listingId)) as Doc<"listings"> | null;
+
+    if (!listing) {
+      throw new Error("NOT_FOUND: Listing not found");
+    }
+
+    await ctx.db.patch(listing._id, {
+      isRemoved: false,
+      isAvailable: true,
+      updatedAt: Date.now(),
+    });
+
+    await ctx.db.insert("auditLogs", {
+      actorId: admin.clerkId,
+      action: "admin.restore_listing",
+      targetEntity: `listings:${listing._id}`,
+      metadata: {
+        listingName: listing.name,
+        ownerId: listing.ownerId,
+      },
+      timestamp: Date.now(),
+    });
+
+    return { success: true, restoredListingId: listing._id };
+  },
+});

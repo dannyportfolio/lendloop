@@ -4,16 +4,15 @@ services:
     container_name: lendloop_n8n
     restart: unless-stopped
     ports:
-      - "5678:5678"
+      - "127.0.0.1:5678:5678"
     environment:
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-lendloop_super_secure_encryption_key_2026}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY must be set in .env}
       - WEBHOOK_URL=http://localhost:5678/
       - N8N_DEFAULT_BINARY_DATA_MODE=default
-      - CONVEX_N8N_HMAC_SECRET=${CONVEX_N8N_HMAC_SECRET:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
-      - N8N_CONVEX_WRITEBACK_SECRET=${N8N_CONVEX_WRITEBACK_SECRET:-secret_bearer_token_for_n8n_writeback_verification}
+      - CONVEX_N8N_HMAC_SECRET=${CONVEX_N8N_HMAC_SECRET:?CONVEX_N8N_HMAC_SECRET must be set in .env}
+      - N8N_CONVEX_WRITEBACK_SECRET=${N8N_CONVEX_WRITEBACK_SECRET:?N8N_CONVEX_WRITEBACK_SECRET must be set in .env}
       - CONVEX_SITE_URL=${CONVEX_SITE_URL:-http://localhost:3000}
-      - NODE_FUNCTION_ALLOW_BUILTIN=*
-      - NODE_FUNCTION_ALLOW_EXTERNAL=*
+      - NODE_FUNCTION_ALLOW_BUILTIN=crypto
       - GENERIC_TIMEZONE=UTC
     volumes:
       - n8n_data:/home/node/.n8n

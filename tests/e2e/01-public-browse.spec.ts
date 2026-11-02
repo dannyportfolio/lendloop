@@ -46,10 +46,14 @@ test.describe("Public Tool Directory and Landing Experience", () => {
 
     const searchInput = page.getByPlaceholder("Search tools or brands...");
     await expect(searchInput).toBeVisible();
-    await searchInput.fill("DeWalt");
 
-    // Clear search
+    // Type a query that yields no matches to verify client-side filter state
+    await searchInput.fill("NonExistentToolXYZ987");
+    await expect(searchInput).toHaveValue("NonExistentToolXYZ987");
+
+    // Clear search input and verify restoration
     await searchInput.clear();
+    await expect(searchInput).toHaveValue("");
 
     // Click Category filter
     const powerToolsBtn = page.getByRole("button", { name: "Power Tools" });

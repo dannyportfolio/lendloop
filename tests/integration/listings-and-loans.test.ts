@@ -4,6 +4,8 @@ import {
   updateListing,
   deleteListing,
   adminRemoveListing,
+  getAllListingsAdmin,
+  adminRestoreListing,
 } from "../../convex/listings";
 import {
   createBorrowRequest,
@@ -309,5 +311,82 @@ describe("Listings and Loan Lifecycle Integration", () => {
       d._id.startsWith("automationEvents")
     );
     expect(events.some((e) => e.eventType === "request.status_changed")).toBe(true);
+  });
+
+  it("does not reactivate a soft-deleted listing when a loan is marked returned", async () => {
+    const listing = {
+      _id: "listings_deleted_saw",
+      ownerId: "users_alice",
+      name: "Old Table Saw",
+      isAvailable: false,
+      isRemoved: true,
+    };
+    const loan = {
+      _id: "loans_deleted_saw",
+      listingId: "listings_deleted_saw",
+      borrowerId: "users_bob",
+      lenderId: "users_alice",
+      startDate: "2026-11-01",
+      dueDate: "2026-11-05",
+      status: "active",
+    };
+    const bobCtx = createMockConvexContext(bob, {
+      users_alice: alice,
+      users_bob: bob,
+      listings_deleted_saw: listing,
+      loans_deleted_saw: loan,
+    });
+
+    const res = await (markLoanReturned as any)._handler(bobCtx, {
+      loanId: "loans_deleted_saw",
+    });
+    expect(res.success).toBe(true);
+
+    const updatedListing = bobCtx._store.get("listings_deleted_saw");
+    expect(updatedListing.isRemoved).toBe(true);
+    expect(updatedListing.isAvailable).toBe(false);
+  });
+
+  it("allows admin to query all listings and restore a removed listing", async () => {
+    const listingActive = {
+      _id: "listings_active",
+      ownerId: "users_alice",
+      name: "Drill",
+      category: "Power Tools",
+      condition: "Good Condition",
+      description: "Drill desc",
+      isAvailable: true,
+      isRemoved: false,
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+    const listingRemoved = {
+      _id: "listings_removed",
+      ownerId: "users_alice",
+      name: "Chainsaw",
+      category: "Power Tools",
+      condition: "Fair / Functional",
+      description: "Chainsaw desc",
+      isAvailable: false,
+      isRemoved: true,
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+    const adminCtx = createMockConvexContext(admin, {
+      users_admin: admin,
+      users_alice: alice,
+      listings_active: listingActive,
+      listings_removed: listingRemoved,
+    });
+
+    const allListings = await (getAllListingsAdmin as any)._handler(adminCtx, {});
+    expect(allListings.length).toBe(2);
+
+    const restoreRes = await (adminRestoreListing as any)._handler(adminCtx, {
+      listingId: "listings_removed",
+    });
+    expect(restoreRes.success).toBe(true);
+    expect(adminCtx._store.get("listings_removed").isRemoved).toBe(false);
+    expect(adminCtx._store.get("listings_removed").isAvailable).toBe(true);
   });
 });

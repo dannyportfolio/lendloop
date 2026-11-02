@@ -1,11 +1,13 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { timingSafeEqual } from "./lib/crypto";
 
 const http = httpRouter();
 
 /**
  * Validates the inbound Bearer credential against the configured secret.
+ * Enforces constant-time comparison and requires an explicit environment secret.
  */
 function isBearerAuthorized(request: Request): boolean {
   const authHeader = request.headers.get("Authorization");
@@ -13,10 +15,11 @@ function isBearerAuthorized(request: Request): boolean {
     return false;
   }
   const token = authHeader.substring(7).trim();
-  const expectedSecret =
-    process.env.N8N_CONVEX_WRITEBACK_SECRET ||
-    "secret_bearer_token_for_n8n_writeback_verification";
-  return token === expectedSecret;
+  const expectedSecret = process.env.N8N_CONVEX_WRITEBACK_SECRET;
+  if (!expectedSecret) {
+    return false;
+  }
+  return timingSafeEqual(token, expectedSecret);
 }
 
 /**

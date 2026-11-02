@@ -16,6 +16,7 @@ import {
   Trash2,
   ArrowLeft,
   Users,
+  RotateCcw,
 } from "lucide-react";
 
 interface AdminLoanItem {
@@ -36,15 +37,18 @@ interface AdminLoanItem {
 
 interface AdminListingItem {
   _id: Id<"listings">;
+  ownerId: Id<"users">;
   name: string;
   category: string;
   condition: string;
   description: string;
   isAvailable: boolean;
+  isRemoved: boolean;
   createdAt: number;
   owner: {
     _id?: Id<"users">;
     name: string;
+    email?: string;
     isTrustedLender: boolean;
   };
 }
@@ -64,13 +68,15 @@ type AdminTab = "loans" | "listings" | "users";
 export default function AdminPage() {
   const viewer = useQuery(api.users.getViewer);
   const allLoans = useQuery(api.loans.getAllLoansAdmin);
-  const allListings = useQuery(api.listings.getPublicListings, {});
+  const allListings = useQuery(api.listings.getAllListingsAdmin);
   const allUsers = useQuery(api.users.getAllUsersAdmin);
 
   const adminRemoveListing = useMutation(api.listings.adminRemoveListing);
+  const adminRestoreListing = useMutation(api.listings.adminRestoreListing);
   const setTrustedLender = useMutation(api.users.setTrustedLender);
 
   const [activeTab, setActiveTab] = useState<AdminTab>("loans");
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -115,21 +121,46 @@ export default function AdminPage() {
   }
 
   const handleAdminRemoveListing = (listingId: Id<"listings">, toolName: string) => {
+    setActionError(null);
     setConfirmDialog({
       isOpen: true,
       title: "Administrative Removal",
       message: `Are you sure you want to administratively remove "${toolName}"? This action will be recorded in the security audit log.`,
       onConfirm: async () => {
-        await adminRemoveListing({
-          listingId,
-          reason: "Administrative moderation policy",
-        });
-        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await adminRemoveListing({
+            listingId,
+            reason: "Administrative moderation policy",
+          });
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        } catch (err: unknown) {
+          setActionError(err instanceof Error ? err.message : "Failed to remove listing");
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        }
+      },
+    });
+  };
+
+  const handleAdminRestoreListing = (listingId: Id<"listings">, toolName: string) => {
+    setActionError(null);
+    setConfirmDialog({
+      isOpen: true,
+      title: "Restore Tool Listing",
+      message: `Are you sure you want to restore "${toolName}"? The tool will become available in the directory again.`,
+      onConfirm: async () => {
+        try {
+          await adminRestoreListing({ listingId });
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        } catch (err: unknown) {
+          setActionError(err instanceof Error ? err.message : "Failed to restore listing");
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        }
       },
     });
   };
 
   const handleToggleTrusted = async (userId: Id<"users">, currentStatus: boolean, userName: string) => {
+    setActionError(null);
     const nextStatus = !currentStatus;
     setConfirmDialog({
       isOpen: true,
@@ -138,11 +169,16 @@ export default function AdminPage() {
         ? `Mark ${userName} as a Trusted Lender? Their listings will display a verified trust badge.`
         : `Revoke Trusted Lender badge from ${userName}?`,
       onConfirm: async () => {
-        await setTrustedLender({
-          userId,
-          isTrusted: nextStatus,
-        });
-        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await setTrustedLender({
+            userId,
+            isTrusted: nextStatus,
+          });
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        } catch (err: unknown) {
+          setActionError(err instanceof Error ? err.message : "Failed to update trusted lender status");
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        }
       },
     });
   };
@@ -232,6 +268,18 @@ export default function AdminPage() {
             </button>
           </div>
 
+          {actionError && (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-center justify-between">
+              <span>{actionError}</span>
+              <button
+                onClick={() => setActionError(null)}
+                className="text-xs font-semibold text-red-800 underline hover:no-underline ml-4"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           {/* TAB 1: ALL LOANS */}
           {activeTab === "loans" && (
             <div className="py-6">
@@ -313,20 +361,21 @@ export default function AdminPage() {
                       <th scope="col" className="px-5 py-3">Category</th>
                       <th scope="col" className="px-5 py-3">Condition</th>
                       <th scope="col" className="px-5 py-3">Owner</th>
+                      <th scope="col" className="px-5 py-3">Status</th>
                       <th scope="col" className="px-5 py-3 text-right">Moderation Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {!allListings ? (
                       <tr>
-                        <td colSpan={5} className="p-8 text-center text-xs text-slate-500">
+                        <td colSpan={6} className="p-8 text-center text-xs text-slate-500">
                           Loading listings...
                         </td>
                       </tr>
                     ) : allListings.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="p-8 text-center text-xs text-slate-500">
-                          No active listings.
+                        <td colSpan={6} className="p-8 text-center text-xs text-slate-500">
+                          No tool listings found in system.
                         </td>
                       </tr>
                     ) : (
@@ -337,15 +386,47 @@ export default function AdminPage() {
                           </td>
                           <td className="px-5 py-3.5">{listing.category}</td>
                           <td className="px-5 py-3.5">{listing.condition}</td>
-                          <td className="px-5 py-3.5">{listing.owner.name}</td>
+                          <td className="px-5 py-3.5">
+                            <div>
+                              <p className="font-medium text-slate-800">{listing.owner.name}</p>
+                              {listing.owner.email && (
+                                <p className="text-xs text-slate-400">{listing.owner.email}</p>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {listing.isRemoved ? (
+                              <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
+                                Removed
+                              </span>
+                            ) : !listing.isAvailable ? (
+                              <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                                On Loan
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                                Available
+                              </span>
+                            )}
+                          </td>
                           <td className="px-5 py-3.5 text-right">
-                            <button
-                              onClick={() => handleAdminRemoveListing(listing._id, listing.name)}
-                              className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 transition"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span>Remove Listing</span>
-                            </button>
+                            {listing.isRemoved ? (
+                              <button
+                                onClick={() => handleAdminRestoreListing(listing._id, listing.name)}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                                <span>Restore Listing</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleAdminRemoveListing(listing._id, listing.name)}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 transition"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span>Remove Listing</span>
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))

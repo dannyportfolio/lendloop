@@ -16,8 +16,8 @@ LendLoop is a neighborhood tool-lending application engineered to showcase produ
 - **Authentication:** Clerk (Server-Side JWT verification integrated with Convex)
 - **Backend & Database:** Convex (Reactive queries, ACID mutations, background actions, secure HTTP endpoints, scheduled crons)
 - **Automation & Integration:** n8n (Dockerized local engine, HMAC SHA-256 webhook receiver, daily overdue scheduler, idempotent write-back)
-- **Infrastructure & DevOps:** Docker Compose (n8n containerized, PostgreSQL backend for n8n), GitHub Actions CI/CD ready
-- **Testing:** Vitest (Unit & Integration tests: 23/23 passing), Playwright (E2E browser tests: 10/10 passing), Security Test Suite (Privilege escalation, IDOR, replay attacks)
+- **Infrastructure & DevOps:** Docker Compose (n8n containerized, local volume storage engine), GitHub Actions CI/CD ready
+- **Testing:** Vitest (Unit & Integration tests: 28/28 passing), Playwright (E2E browser tests: 10/10 passing), Security Test Suite (Privilege escalation, IDOR, replay attacks, timing attacks)
 
 ---
 
@@ -169,7 +169,7 @@ All quality gates have been strictly satisfied:
 
 1. **Type Safety:** `pnpm tsc --noEmit` returns 0 errors.
 2. **Linting:** ESLint passes with 0 warnings and 0 errors.
-3. **Automated Tests:** 23 Vitest tests passed (100%), 10 Playwright E2E tests passed (100%).
+3. **Automated Tests:** 28 Vitest tests passed (100%), 10 Playwright E2E tests passed (100%).
 4. **Security Bounds:** No secrets committed; authorization checks present on all Convex mutations/actions; constant-time HMAC verification.
 5. **UI Craftsmanship:** Meets antislop criteria (no em dashes in UI, no generic gradient slop, contrast >= 4.5:1, keyboard operable, responsive).
 6. **Git Cleanliness:** Clean working tree, conventional commit messages, zero untracked debug artifacts.
