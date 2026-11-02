@@ -47,7 +47,7 @@ export const syncUser = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireAuthenticatedUser(ctx);
-    const updates: Record<string, any> = {
+    const updates: Record<string, string | number | undefined> = {
       updatedAt: Date.now(),
     };
 
