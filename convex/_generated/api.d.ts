@@ -1,4 +1,6 @@
-import type { AnyApi } from "convex/server";
-
-export declare const api: AnyApi;
-export declare const internal: AnyApi;
+/* eslint-disable */
+/**
+ * Generated API definitions for Convex.
+ */
+export declare const api: any;
+export declare const internal: any;
