@@ -1,4 +1,4 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import {
@@ -6,7 +6,7 @@ import {
   requireAuthenticatedUser,
   requireBorrowerOrLender,
 } from "./lib/auth";
-import { isLoanOverdue } from "./lib/dates";
+import { isLoanOverdue, getTodayDateString } from "./lib/dates";
 
 /**
  * Returns all active and historical loans where the caller is either borrower or lender.
@@ -221,5 +221,85 @@ export const markLoanReturned = mutation({
     });
 
     return { success: true, loanId: loan._id };
+  },
+});
+
+/**
+ * Internal query: fetches overdue loans for n8n Workflow B daily reminder processor.
+ */
+export const getOverdueLoansInternal = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const todayStr = getTodayDateString();
+    const activeLoans = await ctx.db
+      .query("loans")
+      .withIndex("by_status_dueDate", (q) => q.eq("status", "active"))
+      .collect();
+
+    const overdue = activeLoans.filter((l) => isLoanOverdue(l.dueDate, todayStr));
+
+    return await Promise.all(
+      overdue.map(async (loan) => {
+        const listing = (await ctx.db.get(loan.listingId)) as Doc<"listings"> | null;
+        const borrower = (await ctx.db.get(loan.borrowerId)) as Doc<"users"> | null;
+        const lender = (await ctx.db.get(loan.lenderId)) as Doc<"users"> | null;
+
+        return {
+          loanId: loan._id,
+          toolName: listing?.name || "Tool",
+          borrowerName: borrower?.name || "Neighbor",
+          borrowerEmail: borrower?.email || "",
+          lenderName: lender?.name || "Lender",
+          startDate: loan.startDate,
+          dueDate: loan.dueDate,
+        };
+      })
+    );
+  },
+});
+
+/**
+ * Internal mutation: records daily reminder write-back with database-level idempotency.
+ */
+export const recordReminderLogInternal = internalMutation({
+  args: {
+    loanId: v.id("loans"),
+    idempotencyKey: v.string(),
+    dueDate: v.string(),
+    deliveryStatus: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existingLog = await ctx.db
+      .query("reminderLogs")
+      .withIndex("by_idempotencyKey", (q) => q.eq("idempotencyKey", args.idempotencyKey))
+      .first();
+
+    if (existingLog) {
+      return { alreadyRecorded: true, reminderId: existingLog._id };
+    }
+
+    const reminderId = await ctx.db.insert("reminderLogs", {
+      loanId: args.loanId,
+      reminderType: "overdue",
+      dueDate: args.dueDate,
+      idempotencyKey: args.idempotencyKey,
+      deliveryStatus: args.deliveryStatus === "failed" ? "failed" : "sent",
+      timestamp: Date.now(),
+    });
+
+    await ctx.db.insert("auditLogs", {
+      actorId: "n8n_overdue_cron",
+      action: "loans.overdue_reminder_recorded",
+      targetEntity: `loans:${args.loanId}`,
+      metadata: {
+        loanId: args.loanId,
+        idempotencyKey: args.idempotencyKey,
+        dueDate: args.dueDate,
+        deliveryStatus: args.deliveryStatus,
+      },
+      timestamp: Date.now(),
+    });
+
+    return { alreadyRecorded: false, reminderId };
   },
 });

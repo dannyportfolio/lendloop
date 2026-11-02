@@ -1,0 +1,184 @@
+{
+  "name": "LendLoop - Workflow A: Request Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "borrow-request",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "Webhook Receiver",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "webhookId": "borrow-request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst headers = $input.item.json.headers || {};\nconst signature = headers['x-lendloop-signature'];\nconst timestamp = parseInt(headers['x-lendloop-timestamp'], 10);\nconst eventId = headers['x-lendloop-event-id'];\nconst body = $input.item.json.body || {};\nconst rawBody = $input.item.json.rawBody || JSON.stringify(body);\n\nconst secret = $env.CONVEX_N8N_HMAC_SECRET || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';\n\n// 1. Check required headers\nif (!signature || !timestamp || !eventId) {\n  return [{ json: { isValid: false, reason: 'Missing signature, timestamp, or eventId header' } }];\n}\n\n// 2. Validate timestamp freshness (5 minutes tolerance = 300,000 ms)\nconst now = Date.now();\nconst diff = Math.abs(now - timestamp);\nif (diff > 300000) {\n  return [{ json: { isValid: false, reason: `Timestamp expired (drift: ${diff}ms > 300000ms)` } }];\n}\n\n// 3. Formulate canonical string: timestamp.eventId.rawBody\nconst canonical = `${timestamp}.${eventId}.${rawBody}`;\nconst expectedSignature = crypto.createHmac('sha256', secret).update(canonical).digest('hex');\n\n// 4. Constant-time comparison\nconst sigBuffer = Buffer.from(signature, 'hex');\nconst expectedBuffer = Buffer.from(expectedSignature, 'hex');\n\nif (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {\n  return [{ json: { isValid: false, reason: 'HMAC signature mismatch' } }];\n}\n\nreturn [{ json: { isValid: true, eventId, timestamp, payload: body.payload || body } }];"
+      },
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "Verify HMAC & Replay",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isValid }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "33333333-3333-3333-3333-333333333333",
+      "name": "Is Signature Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $input.item.json.payload || {};\nconst eventId = $input.item.json.eventId;\n\nconst notification = {\n  eventId,\n  recipient: p.lenderEmail || p.borrowerEmail || 'neighbor@community.local',\n  subject: `LendLoop Notification: ${p.toolName || 'Tool Request'}`,\n  message: `Tool: ${p.toolName}\\nStatus: ${p.newStatus || 'Requested'}\\nDates: ${p.startDate || ''} to ${p.endDate || ''}\\nNote: ${p.note || 'None'}`,\n  sentAt: new Date().toISOString()\n};\n\nconsole.log('[LendLoop Notification Dispatched]', JSON.stringify(notification));\nreturn [{ json: { ...notification, deliverySuccess: true } }];"
+      },
+      "id": "44444444-4444-4444-4444-444444444444",
+      "name": "Format & Dispatch Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.CONVEX_SITE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/api/automation/writeback",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.N8N_CONVEX_WRITEBACK_SECRET || 'secret_bearer_token_for_n8n_writeback_verification' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "eventId",
+              "value": "={{ $json.eventId }}"
+            },
+            {
+              "name": "status",
+              "value": "succeeded"
+            },
+            {
+              "name": "metadata",
+              "value": "={{ { deliveredTo: $json.recipient, sentAt: $json.sentAt } }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "55555555-5555-5555-5555-555555555555",
+      "name": "Write-Back to Convex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1080,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "httpCode": 401,
+        "responseBody": "={{ JSON.stringify({ error: 'Signature verification failed', reason: $json.reason }) }}"
+      },
+      "id": "66666666-6666-6666-6666-666666666666",
+      "name": "Reject Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        860,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Receiver": {
+      "main": [
+        [
+          {
+            "node": "Verify HMAC & Replay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify HMAC & Replay": {
+      "main": [
+        [
+          {
+            "node": "Is Signature Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Signature Valid?": {
+      "main": [
+        [
+          {
+            "node": "Format & Dispatch Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format & Dispatch Notification": {
+      "main": [
+        [
+          {
+            "node": "Write-Back to Convex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

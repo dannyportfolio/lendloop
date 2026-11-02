@@ -1,0 +1,185 @@
+{
+  "name": "LendLoop - Workflow B: Overdue Loan Reminders",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "aaaaaaa1-1111-1111-1111-111111111111",
+      "name": "Daily Schedule (08:00 UTC)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ ($env.CONVEX_SITE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/api/loans/overdue",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.N8N_CONVEX_WRITEBACK_SECRET || 'secret_bearer_token_for_n8n_writeback_verification' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aaaaaaa2-2222-2222-2222-222222222222",
+      "name": "Fetch Overdue Loans",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "aaaaaaa3-3333-3333-3333-333333333333",
+      "name": "Process Each Loan",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const loan = $input.item.json;\nconst today = new Date().toISOString().split('T')[0];\nconst idempotencyKey = `overdue-${loan.loanId}-${today}`;\n\nconst reminder = {\n  loanId: loan.loanId,\n  idempotencyKey,\n  toolName: loan.toolName,\n  dueDate: loan.dueDate,\n  borrowerEmail: loan.borrowerEmail,\n  borrowerName: loan.borrowerName,\n  lenderName: loan.lenderName,\n  reminderMessage: `Friendly neighborhood reminder: Your borrowed \"${loan.toolName}\" was due on ${loan.dueDate}. Please coordinate with ${loan.lenderName} to return it and mark it returned in your LendLoop dashboard.`,\n  sentAt: new Date().toISOString()\n};\n\nconsole.log('[LendLoop Overdue Reminder Sent]', JSON.stringify(reminder));\nreturn [{ json: reminder }];"
+      },
+      "id": "aaaaaaa4-4444-4444-4444-444444444444",
+      "name": "Generate Idempotency & Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.CONVEX_SITE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/api/loans/reminders/record",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.N8N_CONVEX_WRITEBACK_SECRET || 'secret_bearer_token_for_n8n_writeback_verification' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "loanId",
+              "value": "={{ $json.loanId }}"
+            },
+            {
+              "name": "idempotencyKey",
+              "value": "={{ $json.idempotencyKey }}"
+            },
+            {
+              "name": "dueDate",
+              "value": "={{ $json.dueDate }}"
+            },
+            {
+              "name": "deliveryStatus",
+              "value": "sent"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aaaaaaa5-5555-5555-5555-555555555555",
+      "name": "Record Reminder in Convex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1080,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Daily Schedule (08:00 UTC)": {
+      "main": [
+        [
+          {
+            "node": "Fetch Overdue Loans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Overdue Loans": {
+      "main": [
+        [
+          {
+            "node": "Process Each Loan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Each Loan": {
+      "main": [
+        [
+          {
+            "node": "Generate Idempotency & Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Idempotency & Message": {
+      "main": [
+        [
+          {
+            "node": "Record Reminder in Convex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Reminder in Convex": {
+      "main": [
+        [
+          {
+            "node": "Process Each Loan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
