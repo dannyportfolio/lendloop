@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { SignIn } from "@clerk/nextjs";
 
 export default function SignInPage() {
@@ -12,14 +13,22 @@ export default function SignInPage() {
             Borrow what you need. Lend what you don&apos;t.
           </p>
         </div>
-        <SignIn
-          appearance={{
-            elements: {
-              rootBox: "w-full",
-              card: "shadow-sm border border-slate-200 rounded-xl",
-            },
-          }}
-        />
+        <Suspense
+          fallback={
+            <div className="p-8 text-center text-sm text-slate-500 bg-white rounded-xl border border-slate-200">
+              Loading sign in...
+            </div>
+          }
+        >
+          <SignIn
+            appearance={{
+              elements: {
+                rootBox: "w-full",
+                card: "shadow-sm border border-slate-200 rounded-xl",
+              },
+            }}
+          />
+        </Suspense>
       </div>
     </main>
   );

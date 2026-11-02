@@ -1,12 +1,29 @@
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 const isProtectedRoute = createRouteMatcher(["/dashboard(.*)", "/admin(.*)"]);
 
-export default clerkMiddleware(async (auth, req) => {
-  if (isProtectedRoute(req)) {
-    await auth.protect();
-  }
-});
+// In test / offline development without live Clerk credentials, use deterministic route protection
+const isMockAuth =
+  process.env.PLAYWRIGHT_TEST === "true" ||
+  process.env.CLERK_SECRET_KEY?.includes("dummy") ||
+  !process.env.CLERK_SECRET_KEY;
+
+export default isMockAuth
+  ? function middleware(req: NextRequest) {
+      if (isProtectedRoute(req)) {
+        const signInUrl = new URL("/sign-in", req.url);
+        signInUrl.searchParams.set("redirect_url", req.url);
+        return NextResponse.redirect(signInUrl);
+      }
+      return NextResponse.next();
+    }
+  : clerkMiddleware(async (auth, req) => {
+      if (isProtectedRoute(req)) {
+        await auth.protect();
+      }
+    });
 
 export const config = {
   matcher: [
