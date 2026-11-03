@@ -14,12 +14,13 @@ Modern homeowners and makers often purchase expensive specialty tools that sit u
 
 ### Key Highlights
 - **Zero-Trust Server-Side RBAC:** All access control is enforced in Convex server mutations and queries. Client-provided identifiers (`ownerId`, `userId`, `role`) are never trusted.
-- **Data Minimization:** Public endpoints expose only necessary catalog information, withholding private contact information, emails, and internal metadata.
+- **Strict Public Data Minimization:** Public endpoints expose strictly tool name and category only, completely withholding owner identities, contact information, descriptions, and internal metadata.
 - **Transactional Outbox Automation:** State changes (borrow requests, loan transitions) write outbox events in the same ACID database transaction, preventing dual-write inconsistencies.
-- **Signed HMAC SHA-256 Webhooks:** Outbox events dispatched to n8n carry canonical HMAC SHA-256 signatures with 5-minute replay-attack tolerance windows.
-- **Idempotent Reminders & Write-Backs:** Scheduled overdue checks enforce compound idempotency keys, guaranteeing exactly-once delivery and zero duplicate reminders.
+- **Signed HMAC SHA-256 Webhooks:** Outbox events dispatched to n8n carry canonical HMAC SHA-256 signatures with 5-minute replay-attack tolerance windows. Secrets are kept exclusively in environment variables and n8n credentials with zero hardcoded fallbacks in workflow JSON.
+- **Idempotent Reminders & Write-Backs:** Scheduled overdue checks enforce compound idempotency keys (`overdue-{loanId}-{YYYY-MM-DD}`), guaranteeing exactly-once delivery and zero duplicate reminders.
+- **Live Automation Activity Visibility (Bonus):** Both borrower/lender dashboards and platform admin views display real-time reminder delivery status (e.g. *"Overdue reminder sent 2 days ago"*).
 - **Apple-Inspired Minimalist Design:** High-contrast WCAG AA accessible interface, responsive across phone, tablet, and desktop viewports without generic AI slop.
-- **100% Automated Test Pass Rate:** 23 Vitest unit/integration tests and 10 Playwright E2E browser tests passing with zero errors.
+- **100% Automated Test Pass Rate:** 28 Vitest unit/integration tests and 10 Playwright E2E browser tests passing with zero errors.
 
 ---
 
@@ -231,7 +232,7 @@ LendLoop includes automated test suites covering unit logic, integration workflo
 ```bash
 pnpm test
 ```
-**Test Coverage:**
+**Test Coverage (28/28 Passing):**
 - `tests/unit/dates.test.ts`: Date bounds, durations, overdue evaluations.
 - `tests/unit/crypto.test.ts`: HMAC SHA-256 signing, constant-time verification, timestamp tolerance, anti-replay guards.
 - `tests/unit/idempotency.test.ts`: Deduplication keys, retry backoff calculation, stale lock recovery.

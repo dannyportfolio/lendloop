@@ -9,7 +9,9 @@ import { X, Wrench, Loader2 } from "lucide-react";
 const CATEGORIES = [
   "Power Tools",
   "Hand Tools",
-  "Lawn & Garden",
+  "Garden",
+  "Kitchen",
+  "Camping",
   "Woodworking",
   "Plumbing",
   "Electrical",

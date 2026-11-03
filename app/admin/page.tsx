@@ -33,6 +33,12 @@ interface AdminLoanItem {
   returnedAt?: number;
   status: string;
   createdAt: number;
+  latestReminder?: {
+    timestamp: number;
+    deliveryStatus: "sent" | "failed";
+    reminderType: string;
+    dueDate: string;
+  } | null;
 }
 
 interface AdminListingItem {
@@ -292,18 +298,19 @@ export default function AdminPage() {
                       <th scope="col" className="px-5 py-3">Lender</th>
                       <th scope="col" className="px-5 py-3">Due Date</th>
                       <th scope="col" className="px-5 py-3">Status</th>
+                      <th scope="col" className="px-5 py-3">Automation / Reminders</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {!allLoans ? (
                       <tr>
-                        <td colSpan={5} className="p-8 text-center text-xs text-slate-500">
+                        <td colSpan={6} className="p-8 text-center text-xs text-slate-500">
                           Loading global loan registry...
                         </td>
                       </tr>
                     ) : allLoans.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="p-8 text-center text-xs text-slate-500">
+                        <td colSpan={6} className="p-8 text-center text-xs text-slate-500">
                           No loans recorded in platform database yet.
                         </td>
                       </tr>
@@ -340,6 +347,18 @@ export default function AdminPage() {
                             >
                               {loan.status.toUpperCase()}
                             </span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {loan.latestReminder ? (
+                              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                Reminder sent {new Date(loan.latestReminder.timestamp).toLocaleDateString()}
+                              </span>
+                            ) : loan.status === "active" ? (
+                              <span className="text-xs text-slate-400">Scheduled Daily Check</span>
+                            ) : (
+                              <span className="text-xs text-slate-400">—</span>
+                            )}
                           </td>
                         </tr>
                       ))

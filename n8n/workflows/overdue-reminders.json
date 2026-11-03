@@ -30,7 +30,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer {{ $env.N8N_CONVEX_WRITEBACK_SECRET || 'secret_bearer_token_for_n8n_writeback_verification' }}"
+              "value": "Bearer {{ $env.N8N_CONVEX_WRITEBACK_SECRET }}"
             }
           ]
         },
@@ -81,7 +81,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer {{ $env.N8N_CONVEX_WRITEBACK_SECRET || 'secret_bearer_token_for_n8n_writeback_verification' }}"
+              "value": "Bearer {{ $env.N8N_CONVEX_WRITEBACK_SECRET }}"
             },
             {
               "name": "Content-Type",

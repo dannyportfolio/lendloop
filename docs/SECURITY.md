@@ -107,13 +107,16 @@ When n8n completes notification delivery or periodic reminder processing, it wri
 
 ## 4. Data Minimization & Privacy Controls
 
+Following healthcare and B2B security principles, LendLoop enforces strict principle of least privilege and data minimization across public and authenticated tiers:
+
 | Data Category | Public Access | Authenticated User | Admin Access | Internal System |
 |---|---|---|---|---|
-| Tool Name, Category, Condition, Description | YES | YES | YES | YES |
+| Tool Name & Category | YES | YES | YES | YES |
 | Tool Availability Status | YES | YES | YES | YES |
-| Owner Display Name | YES (Anonymized/First Name) | YES | YES | YES |
+| Tool Condition & Description | NEVER (Blocked) | YES | YES | YES |
+| Owner Display Name & Identity | NEVER (Zero Leakage) | YES | YES | YES |
 | Owner Email Address | NEVER | Request counterpart only | YES | YES |
-| User Role & Trusted Lender Status | Public badge only | Self only | YES | YES |
+| User Role & Trusted Lender Status | NEVER | Self & Admin only | YES | YES |
 | Borrow Request Notes & History | NEVER | Borrower & Lender only | YES | YES |
 | Automation Outbox & Event Logs | NEVER | Loan parties (status only) | YES | YES |
 

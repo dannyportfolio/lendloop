@@ -46,6 +46,16 @@ export const getMyLoans = query({
           effectiveStatus = "overdue";
         }
 
+        // Fetch reminder history for this loan to display recent automation activity (Bonus requirement)
+        const reminders = await ctx.db
+          .query("reminderLogs")
+          .withIndex("by_loanId", (q) => q.eq("loanId", loan._id))
+          .collect();
+
+        const latestReminder = reminders.length > 0
+          ? reminders.sort((a, b) => b.timestamp - a.timestamp)[0]
+          : null;
+
         return {
           _id: loan._id,
           listingId: loan.listingId,
@@ -62,6 +72,14 @@ export const getMyLoans = query({
           returnedAt: loan.returnedAt,
           status: effectiveStatus,
           createdAt: loan.createdAt,
+          latestReminder: latestReminder
+            ? {
+                timestamp: latestReminder.timestamp,
+                deliveryStatus: latestReminder.deliveryStatus,
+                reminderType: latestReminder.reminderType,
+                dueDate: latestReminder.dueDate,
+              }
+            : null,
         };
       })
     );
@@ -144,6 +162,15 @@ export const getAllLoansAdmin = query({
           effectiveStatus = "overdue";
         }
 
+        const reminders = await ctx.db
+          .query("reminderLogs")
+          .withIndex("by_loanId", (q) => q.eq("loanId", loan._id))
+          .collect();
+
+        const latestReminder = reminders.length > 0
+          ? reminders.sort((a, b) => b.timestamp - a.timestamp)[0]
+          : null;
+
         return {
           _id: loan._id,
           listingId: loan.listingId,
@@ -158,6 +185,14 @@ export const getAllLoansAdmin = query({
           returnedAt: loan.returnedAt,
           status: effectiveStatus,
           createdAt: loan.createdAt,
+          latestReminder: latestReminder
+            ? {
+                timestamp: latestReminder.timestamp,
+                deliveryStatus: latestReminder.deliveryStatus,
+                reminderType: latestReminder.reminderType,
+                dueDate: latestReminder.dueDate,
+              }
+            : null,
         };
       })
     );

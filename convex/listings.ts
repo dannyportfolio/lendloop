@@ -9,8 +9,9 @@ import {
 
 /**
  * Public catalog query.
- * Data minimization: Excludes user emails, phone numbers, and private metadata.
- * Projects only necessary tool fields, owner display name, and trusted lender badge.
+ * Strict Data Minimization (Fluence Take-Home Requirement):
+ * Excludes all owner details, emails, contact info, and internal metadata.
+ * Returns only tool name, category, and availability status.
  */
 export const getPublicListings = query({
   args: {
@@ -36,17 +37,61 @@ export const getPublicListings = query({
       listings = listings.filter(
         (l) =>
           l.name.toLowerCase().includes(term) ||
+          l.category.toLowerCase().includes(term)
+      );
+    }
+
+    // Project strictly name and category for unauthenticated visitors (zero owner leakage)
+    return listings.map((listing) => ({
+      _id: listing._id,
+      name: listing.name,
+      category: listing.category,
+      isAvailable: listing.isAvailable,
+      createdAt: listing.createdAt,
+    }));
+  },
+});
+
+/**
+ * Authenticated catalog query.
+ * For signed-in users on the dashboard: includes full descriptions, condition,
+ * owner display name, and trusted lender badge needed to evaluate borrow requests.
+ */
+export const getAuthenticatedCatalog = query({
+  args: {
+    category: v.optional(v.string()),
+    searchQuery: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireAuthenticatedUser(ctx);
+
+    let listings = await ctx.db
+      .query("listings")
+      .withIndex("by_isAvailable", (q) =>
+        q.eq("isAvailable", true).eq("isRemoved", false)
+      )
+      .collect();
+
+    if (args.category && args.category !== "All") {
+      listings = listings.filter((l) => l.category === args.category);
+    }
+
+    if (args.searchQuery && args.searchQuery.trim().length > 0) {
+      const term = args.searchQuery.toLowerCase().trim();
+      listings = listings.filter(
+        (l) =>
+          l.name.toLowerCase().includes(term) ||
           l.description.toLowerCase().includes(term) ||
           l.category.toLowerCase().includes(term)
       );
     }
 
-    // Join with owner display name and trusted status without exposing private PII
-    const enrichedListings = await Promise.all(
+    return await Promise.all(
       listings.map(async (listing) => {
         const owner = (await ctx.db.get(listing.ownerId)) as Doc<"users"> | null;
         return {
           _id: listing._id,
+          ownerId: listing.ownerId,
           name: listing.name,
           category: listing.category,
           condition: listing.condition,
@@ -61,8 +106,6 @@ export const getPublicListings = query({
         };
       })
     );
-
-    return enrichedListings;
   },
 });
 

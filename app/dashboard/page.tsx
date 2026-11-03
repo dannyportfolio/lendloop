@@ -93,14 +93,41 @@ interface MyLoanItem {
   returnedAt?: number;
   status: string;
   createdAt: number;
+  latestReminder?: {
+    timestamp: number;
+    deliveryStatus: "sent" | "failed";
+    reminderType: string;
+    dueDate: string;
+  } | null;
 }
 
-type DashboardTab = "catalog" | "my-listings" | "requests" | "loans";
+type DashboardTab =
+  | "catalog"
+  | "my-listings"
+  | "incoming-requests"
+  | "my-requests"
+  | "loans";
+
+function formatReminderNotice(reminder?: {
+  timestamp: number;
+  deliveryStatus: "sent" | "failed";
+  reminderType: string;
+  dueDate: string;
+} | null): string {
+  if (!reminder) return "";
+  const diffHours = Math.round((Date.now() - reminder.timestamp) / (1000 * 60 * 60));
+  if (diffHours < 1) return "Overdue reminder sent just now";
+  if (diffHours === 1) return "Overdue reminder sent 1 hour ago";
+  if (diffHours < 24) return `Overdue reminder sent ${diffHours} hours ago`;
+  const diffDays = Math.round(diffHours / 24);
+  if (diffDays === 1) return "Overdue reminder sent 1 day ago";
+  return `Overdue reminder sent ${diffDays} days ago`;
+}
 
 export default function DashboardPage() {
   const viewer = useQuery(api.users.getViewer);
   const myListings = useQuery(api.listings.getMyListings);
-  const catalogListings = useQuery(api.listings.getPublicListings, {});
+  const catalogListings = useQuery(api.listings.getAuthenticatedCatalog, {});
   const incomingRequests = useQuery(api.requests.getIncomingRequests);
   const sentRequests = useQuery(api.requests.getMySentRequests);
   const myLoans = useQuery(api.loans.getMyLoans);
@@ -255,18 +282,18 @@ export default function DashboardPage() {
           <div className="flex border-b border-slate-200 mt-6 overflow-x-auto scrollbar-none">
             <button
               onClick={() => setActiveTab("catalog")}
-              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition ${
+              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition whitespace-nowrap ${
                 activeTab === "catalog"
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900"
               }`}
             >
-              <span>Browse Catalog</span>
+              <span>All Tools</span>
             </button>
 
             <button
               onClick={() => setActiveTab("my-listings")}
-              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition ${
+              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition whitespace-nowrap ${
                 activeTab === "my-listings"
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900"
@@ -281,14 +308,14 @@ export default function DashboardPage() {
             </button>
 
             <button
-              onClick={() => setActiveTab("requests")}
-              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition ${
-                activeTab === "requests"
+              onClick={() => setActiveTab("incoming-requests")}
+              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition whitespace-nowrap ${
+                activeTab === "incoming-requests"
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900"
               }`}
             >
-              <span>Borrow Requests</span>
+              <span>Incoming Requests</span>
               {pendingIncomingCount > 0 && (
                 <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs text-white font-bold">
                   {pendingIncomingCount}
@@ -297,8 +324,24 @@ export default function DashboardPage() {
             </button>
 
             <button
+              onClick={() => setActiveTab("my-requests")}
+              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition whitespace-nowrap ${
+                activeTab === "my-requests"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900"
+              }`}
+            >
+              <span>My Requests</span>
+              {sentRequests && (
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700 font-medium">
+                  {sentRequests.length}
+                </span>
+              )}
+            </button>
+
+            <button
               onClick={() => setActiveTab("loans")}
-              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition ${
+              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition whitespace-nowrap ${
                 activeTab === "loans"
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900"
@@ -518,139 +561,138 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* TAB 3: BORROW REQUESTS (INCOMING & SENT) */}
-          {activeTab === "requests" && (
-            <div className="py-6 space-y-10">
-              {/* Section 1: Incoming requests for my tools */}
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <h2 className="text-lg font-bold text-slate-900">
-                    Incoming Requests (People wanting to borrow your tools)
-                  </h2>
-                  {pendingIncomingCount > 0 && (
-                    <span className="rounded-full bg-blue-600 text-white text-xs font-bold px-2 py-0.5">
-                      {pendingIncomingCount} pending
-                    </span>
-                  )}
+          {/* TAB 3: INCOMING BORROW REQUESTS */}
+          {activeTab === "incoming-requests" && (
+            <div className="py-6">
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-lg font-bold text-slate-900">
+                  Incoming Requests (Requests to borrow your tools)
+                </h2>
+                {pendingIncomingCount > 0 && (
+                  <span className="rounded-full bg-blue-600 text-white text-xs font-bold px-2 py-0.5">
+                    {pendingIncomingCount} pending
+                  </span>
+                )}
+              </div>
+
+              {!incomingRequests ? (
+                <div className="h-28 rounded-xl bg-slate-200 animate-pulse" />
+              ) : incomingRequests.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500">
+                  No incoming borrow requests at the moment.
                 </div>
-
-                {!incomingRequests ? (
-                  <div className="h-28 rounded-xl bg-slate-200 animate-pulse" />
-                ) : incomingRequests.length === 0 ? (
-                  <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500">
-                    No incoming borrow requests at the moment.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {incomingRequests.map((req: IncomingRequestItem) => (
-                      <div
-                        key={req._id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-xs gap-4"
-                      >
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-bold text-slate-900">
-                              {req.toolName}
-                            </span>
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                                req.status === "pending"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : req.status === "approved"
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : "bg-slate-100 text-slate-600"
-                              }`}
-                            >
-                              {req.status.toUpperCase()}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-600">
-                            Requested by <strong className="text-slate-800">{req.borrowerName}</strong> for dates{" "}
-                            <span className="font-semibold text-slate-900">
-                              {req.startDate} to {req.endDate}
-                            </span>
-                          </p>
-                          {req.note && (
-                            <p className="mt-1 text-xs text-slate-500 italic">
-                              &ldquo;{req.note}&rdquo;
-                            </p>
-                          )}
+              ) : (
+                <div className="space-y-3">
+                  {incomingRequests.map((req: IncomingRequestItem) => (
+                    <div
+                      key={req._id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-xs gap-4"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-bold text-slate-900">
+                            {req.toolName}
+                          </span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              req.status === "pending"
+                                ? "bg-amber-100 text-amber-800"
+                                : req.status === "approved"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {req.status.toUpperCase()}
+                          </span>
                         </div>
-
-                        {req.status === "pending" && (
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              onClick={() => handleApproveRequest(req._id)}
-                              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700"
-                            >
-                              <Check className="h-3.5 w-3.5" />
-                              <span>Approve</span>
-                            </button>
-                            <button
-                              onClick={() => handleDeclineRequest(req._id, req.toolName)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 hover:text-red-600"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                              <span>Decline</span>
-                            </button>
-                          </div>
+                        <p className="text-xs text-slate-600">
+                          Requested by <strong className="text-slate-800">{req.borrowerName}</strong> for dates{" "}
+                          <span className="font-semibold text-slate-900">
+                            {req.startDate} to {req.endDate}
+                          </span>
+                        </p>
+                        {req.note && (
+                          <p className="mt-1 text-xs text-slate-500 italic">
+                            &ldquo;{req.note}&rdquo;
+                          </p>
                         )}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
-              {/* Section 2: Outgoing requests sent by me */}
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 mb-4">
-                  My Sent Requests (Tools you requested from neighbors)
-                </h2>
-
-                {!sentRequests ? (
-                  <div className="h-28 rounded-xl bg-slate-200 animate-pulse" />
-                ) : sentRequests.length === 0 ? (
-                  <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500">
-                    You haven&apos;t sent any borrow requests yet.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {sentRequests.map((req: SentRequestItem) => (
-                      <div
-                        key={req._id}
-                        className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-xs"
-                      >
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-bold text-slate-900">
-                              {req.toolName}
-                            </span>
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                                req.status === "pending"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : req.status === "approved"
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : "bg-slate-100 text-slate-600"
-                              }`}
-                            >
-                              {req.status.toUpperCase()}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-600">
-                            Lender: <strong className="text-slate-800">{req.lenderName}</strong> | Dates:{" "}
-                            {req.startDate} to {req.endDate}
-                          </p>
+                      {req.status === "pending" && (
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => handleApproveRequest(req._id)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                            <span>Approve</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeclineRequest(req._id, req.toolName)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 hover:text-red-600"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                            <span>Decline</span>
+                          </button>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          {/* TAB 4: MY LOANS */}
+          {/* TAB 4: MY SENT REQUESTS */}
+          {activeTab === "my-requests" && (
+            <div className="py-6">
+              <h2 className="text-lg font-bold text-slate-900 mb-4">
+                My Requests (Tools you requested from neighbors)
+              </h2>
+
+              {!sentRequests ? (
+                <div className="h-28 rounded-xl bg-slate-200 animate-pulse" />
+              ) : sentRequests.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500">
+                  You haven&apos;t sent any borrow requests yet.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {sentRequests.map((req: SentRequestItem) => (
+                    <div
+                      key={req._id}
+                      className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-xs"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-bold text-slate-900">
+                            {req.toolName}
+                          </span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              req.status === "pending"
+                                ? "bg-amber-100 text-amber-800"
+                                : req.status === "approved"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {req.status.toUpperCase()}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600">
+                          Lender: <strong className="text-slate-800">{req.lenderName}</strong> | Dates:{" "}
+                          {req.startDate} to {req.endDate}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: MY LOANS */}
           {activeTab === "loans" && (
             <div className="py-6">
               {!myLoans ? (
@@ -707,6 +749,21 @@ export default function DashboardPage() {
                             {loan.dueDate}
                           </strong>
                         </p>
+
+                        {/* Recent Automation Activity (Bonus Requirement) */}
+                        {loan.latestReminder ? (
+                          <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 w-fit">
+                            <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                            <span>
+                              🤖 Automation: {formatReminderNotice(loan.latestReminder)}
+                            </span>
+                          </div>
+                        ) : loan.status === "active" ? (
+                          <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                            <span>Automated overdue tracking active</span>
+                          </div>
+                        ) : null}
                       </div>
 
                       {loan.status !== "returned" && (
