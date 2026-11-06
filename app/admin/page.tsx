@@ -357,7 +357,7 @@ export default function AdminPage() {
                             ) : loan.status === "active" ? (
                               <span className="text-xs text-slate-400">Scheduled Daily Check</span>
                             ) : (
-                              <span className="text-xs text-slate-400">—</span>
+                              <span className="text-xs text-slate-400">None</span>
                             )}
                           </td>
                         </tr>

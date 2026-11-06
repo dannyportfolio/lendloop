@@ -57,9 +57,11 @@ export function validateBorrowDateRange(
     return { valid: false, error: "End date must be on or after start date." };
   }
 
-  const start = new Date(startDateStr);
-  const end = new Date(endDateStr);
-  const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  const [sY, sM, sD] = startDateStr.split("-").map(Number);
+  const [eY, eM, eD] = endDateStr.split("-").map(Number);
+  const startMs = Date.UTC(sY, sM - 1, sD);
+  const endMs = Date.UTC(eY, eM - 1, eD);
+  const diffDays = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24));
   if (diffDays > 60) {
     return { valid: false, error: "Borrow duration cannot exceed 60 days." };
   }

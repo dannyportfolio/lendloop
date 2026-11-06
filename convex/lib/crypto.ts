@@ -43,16 +43,20 @@ export async function computeHmacSha256(
 
 /**
  * Constant-time string comparison to defend against timing attacks.
+ * Iterates through the entire maximum length without early return on length mismatch
+ * to prevent leaking token or secret length through timing side-channels.
  */
 export function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
+  const lenA = a.length;
+  const lenB = b.length;
+  const maxLen = Math.max(lenA, lenB);
+  let mismatch = lenA ^ lenB;
+  for (let i = 0; i < maxLen; i++) {
+    const charA = i < lenA ? a.charCodeAt(i) : 0;
+    const charB = i < lenB ? b.charCodeAt(i) : 0;
+    mismatch |= charA ^ charB;
   }
-  let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return result === 0;
+  return mismatch === 0;
 }
 
 /**

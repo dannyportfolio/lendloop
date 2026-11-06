@@ -11,7 +11,7 @@ const isMockAuth =
   !process.env.CLERK_SECRET_KEY;
 
 export default isMockAuth
-  ? function middleware(req: NextRequest) {
+  ? function proxy(req: NextRequest) {
       if (isProtectedRoute(req)) {
         const signInUrl = new URL("/sign-in", req.url);
         signInUrl.searchParams.set("redirect_url", req.url);

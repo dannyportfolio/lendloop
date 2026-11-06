@@ -217,11 +217,17 @@ export const dispatchPendingEvents = internalAction({
 
       // 2. Cryptographically sign outbound payload with HMAC SHA-256
       const timestamp = Date.now();
+      const outboundBody = {
+        eventId: event.eventId,
+        eventType: event.eventType,
+        payload: event.payload,
+      };
+      const rawBody = JSON.stringify(outboundBody);
       const signed = await signWebhookPayload(
         hmacSecret,
         timestamp,
         event.eventId,
-        event.payload
+        rawBody
       );
 
       try {
@@ -233,11 +239,7 @@ export const dispatchPendingEvents = internalAction({
             "x-lendloop-timestamp": String(timestamp),
             "x-lendloop-event-id": event.eventId,
           },
-          body: JSON.stringify({
-            eventId: event.eventId,
-            eventType: event.eventType,
-            payload: event.payload,
-          }),
+          body: rawBody,
         });
 
         if (response.ok) {
